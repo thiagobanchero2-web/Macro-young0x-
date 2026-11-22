@@ -1,0 +1,621 @@
+-- Services
+local UIS = game:GetService("UserInputService")
+local VIM = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+-- Wait for the player to ensure the environment is ready
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+    LocalPlayer = Players.LocalPlayer
+end
+
+-- GUI Container Parenting (Handles multiple mobile executors)
+local targetParent = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+
+-- Cleanup existing GUI elements if they exist
+if targetParent:FindFirstChild("Young0xTrackpad_V4") then
+    targetParent.Young0xTrackpad_V4:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Young0xTrackpad_V4"
+ScreenGui.Parent = targetParent
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+
+-- --- TRACKING ENGINE VARIABLES ---
+local camera = workspace.CurrentCamera
+local cursorX = camera.ViewportSize.X / 2
+local cursorY = camera.ViewportSize.Y / 2
+local sensitivity = 1.5
+local crosshairType = "Plus"
+local dotSize = 4
+
+-- --- MODERN CROSSHAIR/CURSOR ---
+local CrosshairContainer = Instance.new("Frame")
+CrosshairContainer.Name = "CrosshairCursor"
+CrosshairContainer.Size = UDim2.new(0, 30, 0, 30)
+CrosshairContainer.Position = UDim2.new(0, cursorX, 0, cursorY)
+CrosshairContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+CrosshairContainer.BackgroundTransparency = 1
+CrosshairContainer.ZIndex = 100
+CrosshairContainer.Parent = ScreenGui
+
+local ch_h = Instance.new("Frame")
+ch_h.Size = UDim2.new(1, 0, 0, 2)
+ch_h.Position = UDim2.new(0, 0, 0.5, -1)
+ch_h.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+ch_h.BorderSizePixel = 0
+ch_h.Parent = CrosshairContainer
+
+local ch_v = Instance.new("Frame")
+ch_v.Size = UDim2.new(0, 2, 1, 0)
+ch_v.Position = UDim2.new(0.5, -1, 0, 0)
+ch_v.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+ch_v.BorderSizePixel = 0
+ch_v.Parent = CrosshairContainer
+
+local ch_dot = Instance.new("Frame")
+ch_dot.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+ch_dot.BorderSizePixel = 0
+ch_dot.Parent = CrosshairContainer
+
+local ch_dot_corner = Instance.new("UICorner")
+ch_dot_corner.CornerRadius = UDim.new(1, 0)
+ch_dot_corner.Parent = ch_dot
+
+local function updateCrosshairStyle()
+    ch_dot.Size = UDim2.new(0, dotSize, 0, dotSize)
+    ch_dot.Position = UDim2.new(0.5, -dotSize/2, 0.5, -dotSize/2)
+    if crosshairType == "Dot" then
+        ch_h.Visible = false
+        ch_v.Visible = false
+    else
+        ch_h.Visible = true
+        ch_v.Visible = true
+    end
+end
+
+local function updateCrosshairPosition()
+    local viewSize = camera.ViewportSize
+    cursorX = math.clamp(cursorX, 0, viewSize.X)
+    cursorY = math.clamp(cursorY, 0, viewSize.Y)
+    CrosshairContainer.Position = UDim2.new(0, cursorX, 0, cursorY)
+end
+
+updateCrosshairStyle()
+updateCrosshairPosition()
+
+-- --- MOVABLE & RESIZABLE TRACKPAD WINDOW ---
+local TrackpadFrame = Instance.new("Frame")
+TrackpadFrame.Name = "TrackpadWindow"
+TrackpadFrame.Size = UDim2.new(0, 250, 0, 220)
+TrackpadFrame.Position = UDim2.new(0.1, 0, 0.4, 0)
+TrackpadFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+TrackpadFrame.BackgroundTransparency = 0.2
+TrackpadFrame.BorderSizePixel = 0
+TrackpadFrame.Active = true
+TrackpadFrame.ZIndex = 5
+TrackpadFrame.Parent = ScreenGui
+
+-- FONDO APLICADO AQUÍ
+local BgImage = Instance.new("ImageLabel")
+BgImage.Size = UDim2.new(1, 0, 1, 0)
+BgImage.BackgroundTransparency = 1
+BgImage.Image = "rbxassetid://90221984997667"
+BgImage.ScaleType = Enum.ScaleType.Crop
+BgImage.ZIndex = 4
+BgImage.Parent = TrackpadFrame
+
+local TrackpadCorner = Instance.new("UICorner")
+TrackpadCorner.CornerRadius = UDim.new(0, 8)
+TrackpadCorner.Parent = TrackpadFrame
+
+local TrackpadStroke = Instance.new("UIStroke")
+TrackpadStroke.Thickness = 2
+TrackpadStroke.Color = Color3.fromRGB(55, 55, 55)
+TrackpadStroke.Parent = TrackpadFrame
+
+-- Top Drag Header Bar
+local DragHeader = Instance.new("TextLabel")
+local HeaderCorner = Instance.new("UICorner")
+DragHeader.Name = "DragHeader"
+DragHeader.Size = UDim2.new(1, 0, 0, 25)
+DragHeader.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+DragHeader.Text = "  young0x TRACKPAD (DRAG HEADER TO MOVE)"
+DragHeader.Font = Enum.Font.GothamBold
+DragHeader.TextSize = 10
+DragHeader.TextColor3 = Color3.fromRGB(200, 200, 200)
+DragHeader.TextXAlignment = Enum.TextXAlignment.Left
+DragHeader.Active = true
+DragHeader.ZIndex = 6
+DragHeader.Parent = TrackpadFrame
+
+HeaderCorner.CornerRadius = UDim.new(0, 8)
+HeaderCorner.Parent = DragHeader
+
+-- The Actual Surface Touch Area
+local TouchSurface = Instance.new("TextButton")
+TouchSurface.Name = "TouchSurface"
+TouchSurface.Size = UDim2.new(1, -10, 1, -115)
+TouchSurface.Position = UDim2.new(0, 5, 0, 30)
+TouchSurface.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+TouchSurface.BackgroundTransparency = 0.3
+TouchSurface.Text = ""
+TouchSurface.Active = true
+TouchSurface.ZIndex = 7
+TouchSurface.Parent = TrackpadFrame
+
+local SurfaceCorner = Instance.new("UICorner")
+SurfaceCorner.CornerRadius = UDim.new(0, 6)
+SurfaceCorner.Parent = TouchSurface
+
+-- Resize Handle Anchor (Bottom Right)
+local ResizeHandle = Instance.new("TextButton")
+ResizeHandle.Name = "ResizeHandle"
+ResizeHandle.Size = UDim2.new(0, 20, 0, 20)
+ResizeHandle.Position = UDim2.new(1, -20, 1, -20)
+ResizeHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+ResizeHandle.Text = "⤡"
+ResizeHandle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ResizeHandle.Font = Enum.Font.GothamBold
+ResizeHandle.TextSize = 14
+ResizeHandle.ZIndex = 8
+ResizeHandle.Parent = TrackpadFrame
+
+local ResizeCorner = Instance.new("UICorner")
+ResizeCorner.CornerRadius = UDim.new(0, 4)
+ResizeCorner.Parent = ResizeHandle
+
+-- --- DYNAMIC CONTROL PANEL FOOTER ---
+local ControlsContainer = Instance.new("Frame")
+ControlsContainer.Name = "ControlsContainer"
+ControlsContainer.Size = UDim2.new(1, -10, 0, 75)
+ControlsContainer.Position = UDim2.new(0, 5, 1, -80)
+ControlsContainer.BackgroundTransparency = 1
+ControlsContainer.ZIndex = 7
+ControlsContainer.Parent = TrackpadFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = ControlsContainer
+
+-- Row 1: Sensitivity Slider
+local SliderFrame = Instance.new("Frame")
+SliderFrame.Size = UDim2.new(1, 0, 0, 20)
+SliderFrame.BackgroundTransparency = 1
+SliderFrame.ZIndex = 7
+SliderFrame.LayoutOrder = 1
+SliderFrame.Parent = ControlsContainer
+
+local SliderLabel = Instance.new("TextLabel")
+SliderLabel.Size = UDim2.new(0, 65, 1, 0)
+SliderLabel.Text = "SENS: 1.5"
+SliderLabel.Font = Enum.Font.GothamBold
+SliderLabel.TextSize = 10
+SliderLabel.TextColor3 = Color3.fromRGB(0, 255, 136)
+SliderLabel.BackgroundTransparency = 1
+SliderLabel.ZIndex = 8
+SliderLabel.Parent = SliderFrame
+
+local SliderBar = Instance.new("TextButton")
+SliderBar.Size = UDim2.new(1, -75, 0, 6)
+SliderBar.Position = UDim2.new(0, 70, 0.5, -3)
+SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SliderBar.Text = ""
+SliderBar.ZIndex = 8
+SliderBar.Parent = SliderFrame
+
+local SliderKnob = Instance.new("Frame")
+SliderKnob.Size = UDim2.new(0, 12, 0, 12)
+SliderKnob.Position = UDim2.new(0.3, -6, 0.5, -6)
+SliderKnob.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+SliderKnob.ZIndex = 9
+SliderKnob.Parent = SliderBar
+
+local KnobCorner = Instance.new("UICorner")
+KnobCorner.CornerRadius = UDim.new(1, 0)
+KnobCorner.Parent = SliderKnob
+
+-- Row 2: Crosshair Type Selector Toggle
+local CrosshairTypeFrame = Instance.new("Frame")
+CrosshairTypeFrame.Size = UDim2.new(1, 0, 0, 20)
+CrosshairTypeFrame.BackgroundTransparency = 1
+CrosshairTypeFrame.ZIndex = 7
+CrosshairTypeFrame.LayoutOrder = 2
+CrosshairTypeFrame.Parent = ControlsContainer
+
+local TypeLabel = Instance.new("TextLabel")
+TypeLabel.Size = UDim2.new(0, 65, 1, 0)
+TypeLabel.Text = "TYPE: PLUS"
+TypeLabel.Font = Enum.Font.GothamBold
+TypeLabel.TextSize = 10
+TypeLabel.TextColor3 = Color3.fromRGB(0, 255, 136)
+TypeLabel.BackgroundTransparency = 1
+TypeLabel.ZIndex = 8
+TypeLabel.Parent = CrosshairTypeFrame
+
+local TypeToggleButton = Instance.new("TextButton")
+TypeToggleButton.Size = UDim2.new(1, -75, 1, 0)
+TypeToggleButton.Position = UDim2.new(0, 70, 0, 0)
+TypeToggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TypeToggleButton.Text = "TOGGLE STYLE"
+TypeToggleButton.Font = Enum.Font.GothamBold
+TypeToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TypeToggleButton.TextSize = 10
+TypeToggleButton.ZIndex = 8
+TypeToggleButton.Parent = CrosshairTypeFrame
+
+local TypeButtonCorner = Instance.new("UICorner")
+TypeButtonCorner.CornerRadius = UDim.new(0, 4)
+TypeButtonCorner.Parent = TypeToggleButton
+
+-- Row 3: Dot Size Slider Engine
+local DotSizeFrame = Instance.new("Frame")
+DotSizeFrame.Size = UDim2.new(1, 0, 0, 20)
+DotSizeFrame.BackgroundTransparency = 1
+DotSizeFrame.ZIndex = 7
+DotSizeFrame.LayoutOrder = 3
+DotSizeFrame.Parent = ControlsContainer
+
+local DotSizeLabel = Instance.new("TextLabel")
+DotSizeLabel.Size = UDim2.new(0, 65, 1, 0)
+DotSizeLabel.Text = "DOT SIZE: 4"
+DotSizeLabel.Font = Enum.Font.GothamBold
+DotSizeLabel.TextSize = 10
+DotSizeLabel.TextColor3 = Color3.fromRGB(0, 255, 136)
+DotSizeLabel.BackgroundTransparency = 1
+DotSizeLabel.ZIndex = 8
+DotSizeLabel.Parent = DotSizeFrame
+
+local DotSizeBar = Instance.new("TextButton")
+DotSizeBar.Size = UDim2.new(1, -75, 0, 6)
+DotSizeBar.Position = UDim2.new(0, 70, 0.5, -3)
+DotSizeBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+DotSizeBar.Text = ""
+DotSizeBar.ZIndex = 8
+DotSizeBar.Parent = DotSizeFrame
+
+local DotKnob = Instance.new("Frame")
+DotKnob.Size = UDim2.new(0, 12, 0, 12)
+DotKnob.Position = UDim2.new(0.1, -6, 0.5, -6)
+DotKnob.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+DotKnob.ZIndex = 9
+DotKnob.Parent = DotSizeBar
+
+local DotKnobCorner = Instance.new("UICorner")
+DotKnobCorner.CornerRadius = UDim.new(1, 0)
+DotKnobCorner.Parent = DotKnob
+
+-- --- GLOBAL WINDOW DRAGGING & RESIZING MODULES ---
+local function makeMovable(targetObj, handleObj)
+    local dragToggle, dragStart, startPos
+    handleObj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragToggle = true
+            dragStart = input.Position
+            startPos = targetObj.Position
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragToggle and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local delta = input.Position - dragStart
+            targetObj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragToggle = false
+        end
+    end)
+end
+
+makeMovable(TrackpadFrame, DragHeader)
+
+-- Window Resizing Logic Engine
+local resizing = false
+local resizeStartSize, resizeStartPos
+ResizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        resizing = true
+        resizeStartSize = TrackpadFrame.Size
+        resizeStartPos = input.Position
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if resizing and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        local delta = input.Position - resizeStartPos
+        local newX = math.clamp(resizeStartSize.X.Offset + delta.X, 220, 600)
+        local newY = math.clamp(resizeStartSize.Y.Offset + delta.Y, 200, 500)
+        TrackpadFrame.Size = UDim2.new(0, newX, 0, newY)
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        resizing = false
+    end
+end)-- Slider Sensitivity Calculation Engine
+local adjustingSens = false
+local function updateSlider(input)
+    local barAbsoluteWidth = SliderBar.AbsoluteSize.X
+    if barAbsoluteWidth == 0 then barAbsoluteWidth = 1 end
+    local relativeX = input.Position.X - SliderBar.AbsolutePosition.X
+    local percentage = math.clamp(relativeX / barAbsoluteWidth, 0, 1)
+    SliderKnob.Position = UDim2.new(percentage, -6, 0.5, -6)
+    sensitivity = 0.2 + (percentage * 5.8)
+    SliderLabel.Text = string.format("SENS: %.1f", sensitivity)
+end
+
+SliderBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        adjustingSens = true
+        updateSlider(input)
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if adjustingSens and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        updateSlider(input)
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        adjustingSens = false
+    end
+end)
+
+-- Crosshair Changer Toggle Execution
+TypeToggleButton.Activated:Connect(function()
+    if crosshairType == "Plus" then
+        crosshairType = "Dot"
+    else
+        crosshairType = "Plus"
+    end
+    TypeLabel.Text = "TYPE: " .. string.upper(crosshairType)
+    updateCrosshairStyle()
+end)
+
+-- Dot Size Adjuster Engine
+local adjustingDot = false
+local function updateDotSlider(input)
+    local barAbsoluteWidth = DotSizeBar.AbsoluteSize.X
+    if barAbsoluteWidth == 0 then barAbsoluteWidth = 1 end
+    local relativeX = input.Position.X - DotSizeBar.AbsolutePosition.X
+    local percentage = math.clamp(relativeX / barAbsoluteWidth, 0, 1)
+    DotKnob.Position = UDim2.new(percentage, -6, 0.5, -6)
+    dotSize = math.round(2 + (percentage * 22))
+    DotSizeLabel.Text = "DOT SIZE: " .. tostring(dotSize)
+    updateCrosshairStyle()
+end
+
+DotSizeBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        adjustingDot = true
+        updateDotSlider(input)
+    end
+end)
+UIS.InputChanged:Connect(function(input)
+    if adjustingDot and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        updateDotSlider(input)
+    end
+end)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        adjustingDot = false
+    end
+end)
+
+-- --- FIXED TRACKPAD DRAG MOVEMENT MOTOR ---
+local trackingInput = nil
+local lastTrackpadX = 0
+local lastTrackpadY = 0
+
+TouchSurface.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch and not trackingInput then
+        trackingInput = input
+        lastTrackpadX = input.Position.X
+        lastTrackpadY = input.Position.Y
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if input == trackingInput then
+        local deltaX = input.Position.X - lastTrackpadX
+        local deltaY = input.Position.Y - lastTrackpadY
+        cursorX = cursorX + (deltaX * sensitivity)
+        cursorY = cursorY + (deltaY * sensitivity)
+        updateCrosshairPosition()
+        lastTrackpadX = input.Position.X
+        lastTrackpadY = input.Position.Y
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input == trackingInput then
+        trackingInput = nil
+    end
+end)
+
+-- --- CONTROL HUBS AND ACTION BUTTONS ---
+local MainButton = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+local UIStroke = Instance.new("UIStroke")
+
+MainButton.Name = "TouchButton"
+MainButton.Parent = ScreenGui
+MainButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainButton.Position = UDim2.new(0.82, 0, 0.5, -40)
+MainButton.Size = UDim2.new(0, 80, 0, 80)
+MainButton.Font = Enum.Font.GothamBold
+MainButton.Text = "HOLD"
+MainButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MainButton.TextSize = 16
+MainButton.Active = true 
+MainButton.ZIndex = 50
+
+UICorner.CornerRadius = UDim.new(0, 20)
+UICorner.Parent = MainButton
+UIStroke.Thickness = 3
+UIStroke.Color = Color3.fromRGB(255, 255, 255)
+UIStroke.Parent = MainButton
+
+-- Plus Sign Toggle Button
+local ToggleButton = Instance.new("TextButton")
+local ToggleCorner = Instance.new("UICorner")
+local ToggleStroke = Instance.new("UIStroke")
+
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Parent = MainButton 
+ToggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ToggleButton.Position = UDim2.new(0.5, -15, 0, -35)
+ToggleButton.Size = UDim2.new(0, 30, 0, 30)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Text = "+"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 18
+ToggleButton.Active = true
+ToggleButton.ZIndex = 51
+
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = ToggleButton
+ToggleStroke.Thickness = 2
+ToggleStroke.Color = Color3.fromRGB(255, 255, 255)
+ToggleStroke.Parent = ToggleButton
+
+-- Minus Sign Drag Handle Button
+local MoveButton = Instance.new("TextButton")
+local MoveCorner = Instance.new("UICorner")
+local MoveStroke = Instance.new("UIStroke")
+
+MoveButton.Name = "MoveButton"
+MoveButton.Parent = MainButton
+MoveButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MoveButton.Position = UDim2.new(0, -35, 0.5, -15)
+MoveButton.Size = UDim2.new(0, 30, 0, 30)
+MoveButton.Font = Enum.Font.GothamBold
+MoveButton.Text = "-"
+MoveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MoveButton.TextSize = 18
+MoveButton.Active = true
+MoveButton.ZIndex = 51
+
+MoveCorner.CornerRadius = UDim.new(0, 8)
+MoveCorner.Parent = MoveButton
+MoveStroke.Thickness = 2
+MoveStroke.Color = Color3.fromRGB(255, 255, 255)
+MoveStroke.Parent = MoveButton
+
+-- --- DRAG HANDLE ENGINE FOR THE MINUS BUTTON ---
+local draggingButton = false
+local buttonDragInput, buttonDragStart, buttonStartPos
+
+MoveButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingButton = true
+        buttonDragInput = input
+        buttonDragStart = input.Position
+        buttonStartPos = MainButton.Position
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if draggingButton and input == buttonDragInput then
+        local delta = input.Position - buttonDragStart
+        MainButton.Position = UDim2.new(
+            buttonStartPos.X.Scale, buttonStartPos.X.Offset + delta.X,
+            buttonStartPos.Y.Scale, buttonStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input == buttonDragInput then
+        draggingButton = false
+        buttonDragInput = nil
+    end
+end)
+
+-- --- AUTOFIRE LOOP HANDLING ---
+local holding = false
+local toggled = false
+local dragInput
+local SIMULATED_FINGER_ID = 9
+local fastFireConnection
+
+local function stopAutoFire()
+    if fastFireConnection then
+        fastFireConnection:Disconnect()
+        fastFireConnection = nil
+    end
+end
+
+local function runAutoFire()
+    stopAutoFire()
+    fastFireConnection = RunService.Heartbeat:Connect(function()
+        if not holding and not toggled then 
+            stopAutoFire()
+            return 
+        end
+        VIM:SendTouchEvent(SIMULATED_FINGER_ID, 0, cursorX, cursorY)
+        VIM:SendTouchEvent(SIMULATED_FINGER_ID, 2, cursorX, cursorY)
+    end)
+end
+
+ToggleButton.Activated:Connect(function()
+    toggled = not toggled
+    if toggled then
+        ToggleStroke.Color = Color3.fromRGB(0, 255, 150)
+        ToggleButton.TextColor3 = Color3.fromRGB(0, 255, 150)
+        ch_h.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        ch_v.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        ch_dot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        runAutoFire()
+    else
+        ToggleStroke.Color = Color3.fromRGB(255, 255, 255)
+        ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        if not holding then
+            stopAutoFire()
+            VIM:SendTouchEvent(SIMULATED_FINGER_ID, 2, cursorX, cursorY)
+            ch_h.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+            ch_v.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+            ch_dot.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+        end
+    end
+end)
+
+-- Static Touch Button Hold Handler
+MainButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch and not dragInput then
+        dragInput = input
+        holding = true
+        UIStroke.Color = Color3.fromRGB(0, 255, 150)
+        ch_h.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        ch_v.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        ch_dot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+        
+        if not toggled then
+            runAutoFire()
+        end
+    end
+end)
+
+MainButton.InputEnded:Connect(function(input)
+    if input == dragInput then
+        holding = false
+        dragInput = nil
+        UIStroke.Color = Color3.fromRGB(255, 255, 255)
+        if not toggled then
+            stopAutoFire()
+            VIM:SendTouchEvent(SIMULATED_FINGER_ID, 2, cursorX, cursorY)
+            ch_h.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+            ch_v.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+            ch_dot.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+        end
+    end
+end)
+
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    updateCrosshairPosition()
+end)
